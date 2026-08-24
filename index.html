@@ -27,33 +27,29 @@
 
       <section class="panel">
         <div class="filters">
-          <label>
-            Bookmaker
-            <select id="filter-bookmaker">
-              <option value="">Todas</option>
-            </select>
-          </label>
-          <label>
-            Mercado
-            <select id="filter-market">
-              <option value="">Todos</option>
-            </select>
-          </label>
-          <label>
-            Tipo de log
-            <select id="filter-type">
-              <option value="">Todos</option>
-              <option value="replicator">replicator</option>
-              <option value="scanner">scanner</option>
-            </select>
-          </label>
-          <label>
-            Busca
+          <div class="filter-field">
+            <span class="filter-field-label">Bookmaker</span>
+            <div id="filter-bookmaker"></div>
+          </div>
+          <div class="filter-field filter-field-market">
+            <span class="filter-field-label">Mercado</span>
+            <div id="filter-market"></div>
+          </div>
+          <div class="filter-field">
+            <span class="filter-field-label">Tipo de log</span>
+            <div id="filter-type"></div>
+          </div>
+          <label class="filter-field">
+            <span class="filter-field-label">Busca</span>
             <input id="filter-search" type="search" placeholder="Time, competição, MsgGuid..." />
           </label>
-          <div class="actions">
-            <button id="clear-filters" class="secondary" type="button">Limpar filtros</button>
-            <button id="export-btn" type="button" disabled>Exportar filtrados</button>
+          <div class="filter-field filter-actions">
+            <span class="filter-field-label">Ações</span>
+            <div class="actions">
+              <button id="toggle-hide-props" class="secondary action-btn" type="button">Ocultar props</button>
+              <button id="clear-filters" class="secondary action-btn" type="button">Limpar filtros</button>
+              <button id="export-btn" class="action-btn" type="button" disabled>Exportar filtrados</button>
+            </div>
           </div>
         </div>
       </section>
@@ -71,6 +67,11 @@
           <div class="stat">
             <span class="stat-label">Arquivo</span>
             <span id="stat-source" class="stat-value">—</span>
+          </div>
+          <div class="stat stat-matchup">
+            <span class="stat-label">Confronto</span>
+            <span id="stat-matchup" class="stat-value">—</span>
+            <span id="stat-matchup-meta" class="stat-meta" hidden></span>
           </div>
         </div>
 
