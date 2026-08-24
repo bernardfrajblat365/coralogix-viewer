@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Coralogix Viewer</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="hero">
+        <h1>Coralogix Viewer</h1>
+        <p>
+          Faça upload de um export CSV do Coralogix (bruto ou normalizado), visualize odds
+          em tabela e filtre por bookmaker, mercado, tipo de log ou texto livre.
+        </p>
+      </header>
+
+      <section class="panel">
+        <div id="dropzone" class="dropzone">
+          <input id="file-input" type="file" accept=".csv,text/csv" />
+          <strong>Arraste um CSV aqui ou clique para escolher</strong>
+          <span>Suporta export bruto (coluna Source) ou CSV já normalizado</span>
+        </div>
+        <div id="errors" class="errors" hidden></div>
+      </section>
+
+      <section class="panel">
+        <div class="filters">
+          <label>
+            Bookmaker
+            <select id="filter-bookmaker">
+              <option value="">Todas</option>
+            </select>
+          </label>
+          <label>
+            Mercado
+            <select id="filter-market">
+              <option value="">Todos</option>
+            </select>
+          </label>
+          <label>
+            Tipo de log
+            <select id="filter-type">
+              <option value="">Todos</option>
+              <option value="replicator">replicator</option>
+              <option value="scanner">scanner</option>
+            </select>
+          </label>
+          <label>
+            Busca
+            <input id="filter-search" type="search" placeholder="Time, competição, MsgGuid..." />
+          </label>
+          <div class="actions">
+            <button id="clear-filters" class="secondary" type="button">Limpar filtros</button>
+            <button id="export-btn" type="button" disabled>Exportar filtrados</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="stats">
+          <div class="stat">
+            <span class="stat-label">Total</span>
+            <span id="stat-total" class="stat-value">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Visíveis</span>
+            <span id="stat-visible" class="stat-value">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Arquivo</span>
+            <span id="stat-source" class="stat-value">—</span>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <colgroup id="table-colgroup"></colgroup>
+            <thead>
+              <tr id="table-head"></tr>
+            </thead>
+            <tbody id="table-body"></tbody>
+          </table>
+          <div id="empty-state" class="empty">Nenhum dado carregado ainda.</div>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="app.js"></script>
+    <noscript>
+      <p style="padding: 20px; color: #94a3b8">
+        JavaScript é necessário. Se abrir via arquivo local não funcionar, rode:
+        <code>.\serve.ps1</code> e acesse <code>http://localhost:8080</code>
+      </p>
+    </noscript>
+  </body>
+</html>
