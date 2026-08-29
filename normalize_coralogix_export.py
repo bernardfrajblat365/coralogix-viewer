@@ -25,6 +25,25 @@ def parse_json_maybe(value):
     return None
 
 
+def unwrap_serilog(value):
+    """Peel Coralogix/OTel wrappers (`text`, `logRecord.body`) until Serilog fields appear."""
+    current = parse_json_maybe(value)
+    for _ in range(5):
+        if not isinstance(current, dict):
+            return None
+        if current.get("MessageTemplate") is not None or current.get("Properties") is not None:
+            return current
+        if current.get("text") is not None:
+            current = parse_json_maybe(current["text"])
+            continue
+        body = (current.get("logRecord") or {}).get("body")
+        if body is not None:
+            current = parse_json_maybe(body)
+            continue
+        break
+    return current if isinstance(current, dict) else None
+
+
 def detect_log_type(serilog: dict) -> str:
     template = serilog.get("MessageTemplate", "")
     if "received message from LS" in template:
@@ -310,7 +329,7 @@ def normalize_csv(
 
     for idx, row in df.iterrows():
         try:
-            serilog = parse_json_maybe(row["Source"])
+            serilog = unwrap_serilog(row["Source"])
             if not serilog:
                 errors.append({"row": idx, "error": "empty or invalid Source JSON"})
                 continue

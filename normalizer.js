@@ -79,6 +79,24 @@ function parseJsonMaybe(value) {
   return JSON.parse(text);
 }
 
+/** Peel Coralogix/OTel wrappers (`text`, `logRecord.body`) until Serilog fields appear. */
+function unwrapSerilog(value) {
+  let current = parseJsonMaybe(value);
+  for (let depth = 0; depth < 5 && current && typeof current === "object"; depth++) {
+    if (current.MessageTemplate != null || current.Properties != null) return current;
+    if (current.text != null) {
+      current = parseJsonMaybe(current.text);
+      continue;
+    }
+    if (current.logRecord?.body != null) {
+      current = parseJsonMaybe(current.logRecord.body);
+      continue;
+    }
+    break;
+  }
+  return current && typeof current === "object" ? current : null;
+}
+
 function detectLogType(serilog) {
   const template = String(serilog.MessageTemplate || "");
   if (template.includes("received message from LS")) return "replicator";
@@ -432,7 +450,7 @@ export function normalizeCoralogixRows(csvRows) {
 
   csvRows.forEach((row, index) => {
     try {
-      const serilog = parseJsonMaybe(row.Source);
+      const serilog = unwrapSerilog(row.Source);
       if (!serilog) {
         errors.push(`Linha ${index + 1}: Source JSON inválido`);
         return;
@@ -454,7 +472,12 @@ export function normalizeCoralogixRows(csvRows) {
 
       rows.push(...parsed);
     } catch (error) {
-      errors.push(`Linha ${index + 1}: ${error instanceof Error ? error.message : String(error)}`);
+      const message = error instanceof Error ? error.message : String(error);
+      if (/Unterminated string|Unexpected end of JSON/i.test(message)) {
+        errors.push(`Linha ${index + 1}: Source truncado (JSON incompleto)`);
+      } else {
+        errors.push(`Linha ${index + 1}: ${message}`);
+      }
     }
   });
 
