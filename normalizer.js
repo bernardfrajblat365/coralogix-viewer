@@ -16,20 +16,41 @@ const OPTION_PAIRS = [
 const YES_NO_MARKET_PATTERN =
   /to score|both teams|btts|clean sheet|win to nil|to win to nil|score first|score 1st|score 2nd|penalty|send off|red card|extra time|own goal/i;
 
+/** Keys promoted to fixed odd columns — anything else is treated as a named selection (e.g. player). */
+const STANDARD_ODD_KEYS = new Set([
+  "1",
+  "X",
+  "2",
+  "Under",
+  "Over",
+  "1X",
+  "12",
+  "X2",
+  "Yes",
+  "No",
+  "YES",
+  "NO",
+  "Sim",
+  "SIM",
+  "Nao",
+  "Não",
+  "NAO",
+  "Y",
+  "N",
+]);
+
 export const DISPLAY_COLUMNS = [
   { key: "timestamp", label: "Hora", className: "col-time", hint: "Timestamp", weight: 4 },
   { key: "log_type", label: "Tipo", className: "col-type", weight: 3 },
   { key: "market", label: "Mercado", className: "col-market", weight: 22 },
   { key: "bookmaker", label: "Book", className: "col-book", hint: "Bookmaker", weight: 6 },
-  { key: "matchup", label: "Jogo", className: "col-matchup", hint: "Casa vs Fora", virtual: true, weight: 14 },
-  { key: "competition", label: "Comp", className: "col-comp", hint: "Competição", weight: 8 },
   { key: "fixture_id", label: "Fixture", className: "col-fixture", hint: "Fixture ID", weight: 7 },
   { key: "odd_1", label: "1", className: "col-odd", weight: 4.5 },
   { key: "odd_x", label: "X", className: "col-odd", weight: 4.5 },
   { key: "odd_2", label: "2", className: "col-odd", weight: 4.5 },
   { key: "odd_under", label: "U", className: "col-odd", hint: "Under", weight: 4.5 },
   { key: "odd_over", label: "O", className: "col-odd", hint: "Over", weight: 4.5 },
-  { key: "odd_yes", label: "S", className: "col-odd", hint: "Sim", weight: 4.5 },
+  { key: "odd_yes", label: "S", className: "col-odd", hint: "Sim / odd da seleção", weight: 4.5 },
   { key: "odd_no", label: "N", className: "col-odd", hint: "Não", weight: 4.5 },
   { key: "line_parameter", label: "Linha", className: "col-line", hint: "Handicap / linha", weight: 5 },
   { key: "msg_guid", label: "Guid", className: "col-guid", hint: "MsgGuid", weight: 9 },
@@ -56,6 +77,24 @@ function parseJsonMaybe(value) {
   const text = String(value).trim();
   if (!text) return null;
   return JSON.parse(text);
+}
+
+/** Peel Coralogix/OTel wrappers (`text`, `logRecord.body`) until Serilog fields appear. */
+function unwrapSerilog(value) {
+  let current = parseJsonMaybe(value);
+  for (let depth = 0; depth < 5 && current && typeof current === "object"; depth++) {
+    if (current.MessageTemplate != null || current.Properties != null) return current;
+    if (current.text != null) {
+      current = parseJsonMaybe(current.text);
+      continue;
+    }
+    if (current.logRecord?.body != null) {
+      current = parseJsonMaybe(current.logRecord.body);
+      continue;
+    }
+    break;
+  }
+  return current && typeof current === "object" ? current : null;
 }
 
 function detectLogType(serilog) {
@@ -174,6 +213,7 @@ function newRow(fields) {
     competition: null,
     country: null,
     start_time: null,
+    selection: null,
     odds_json: null,
     odd_1: null,
     odd_x: null,
@@ -203,6 +243,115 @@ function oddsColumns(odds) {
     odd_yes: formatDecimal(odds.Yes),
     odd_no: formatDecimal(odds.No),
   };
+}
+
+function parseOddsJson(value) {
+  if (value == null || value === "") return null;
+  if (typeof value === "object") return value;
+  try {
+    return JSON.parse(String(value));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Named selections in odds_json (players, correct scores, ranges, etc.) —
+ * anything that is not a fixed 1/X/2/U/O/Yes/No column.
+ * @param {string | Record<string, unknown> | null | undefined} oddsJson
+ * @returns {{ name: string, odd: string }[]}
+ */
+export function getNamedSelections(oddsJson) {
+  const odds = parseOddsJson(oddsJson);
+  if (!odds || typeof odds !== "object") return [];
+
+  return Object.entries(odds)
+    .filter(([key, price]) => !STANDARD_ODD_KEYS.has(key) && price != null && price !== "")
+    .map(([name, price]) => ({ name, odd: formatDecimal(price) || String(price) }))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+}
+
+/** Score-like keys (Correct Score), not player names. */
+const SCORE_SELECTION_PATTERN = /^\d+-\d+$/;
+
+/** Named-selection markets that are not player props. */
+const NON_PLAYER_PROP_MARKET_PATTERN =
+  /correct score|corners range|goals range|range \d|goalkeeper over saves/i;
+
+/** Player-stat markets identified by name. */
+const PLAYER_PROP_MARKET_PATTERN =
+  /\bplayer\b|goalscorer|to be booked|assist anytime|score or assist|to score -/i;
+
+/** @param {NormalizedRow} row */
+export function hasNamedSelections(row) {
+  return getNamedSelections(row.odds_json).length > 0;
+}
+
+/** @param {NormalizedRow} row */
+export function isPlayerPropMarket(row) {
+  const market = String(row.market || "");
+  if (NON_PLAYER_PROP_MARKET_PATTERN.test(market)) return false;
+  if (PLAYER_PROP_MARKET_PATTERN.test(market)) return true;
+
+  const selections = getNamedSelections(row.odds_json);
+  if (!selections.length) return false;
+  if (selections.every(({ name }) => SCORE_SELECTION_PATTERN.test(name))) return false;
+  if (/range/i.test(market)) return false;
+
+  return true;
+}
+
+/** @deprecated Use isPlayerPropMarket */
+export function isPropMarket(row) {
+  return isPlayerPropMarket(row);
+}
+
+/**
+ * If a previous export exploded one market into many selection rows, merge them back.
+ * @param {NormalizedRow[]} rows
+ * @returns {NormalizedRow[]}
+ */
+export function collapseNamedSelectionRows(rows) {
+  /** @type {NormalizedRow[]} */
+  const out = [];
+  /** @type {Map<string, { row: NormalizedRow, odds: Record<string, number> }>} */
+  const groups = new Map();
+
+  for (const row of rows) {
+    if (!row.selection) {
+      out.push(row);
+      continue;
+    }
+
+    const key = [row.timestamp, row.msg_guid, row.market, row.bookmaker, row.fixture_id].join("|");
+    let group = groups.get(key);
+    if (!group) {
+      const parent = newRow({
+        ...row,
+        selection: null,
+        odd_yes: null,
+        odd_no: null,
+        odd_1: null,
+        odd_x: null,
+        odd_2: null,
+        odd_under: null,
+        odd_over: null,
+        odd_1x: null,
+        odd_12: null,
+        odd_x2: null,
+        odds_json: "{}",
+      });
+      group = { row: parent, odds: {} };
+      groups.set(key, group);
+      out.push(parent);
+    }
+
+    const price = row.odd_yes != null ? Number(row.odd_yes) : NaN;
+    if (!Number.isNaN(price)) group.odds[row.selection] = price;
+    group.row.odds_json = JSON.stringify(group.odds);
+  }
+
+  return out;
 }
 
 function parseReplicatorRow(serilog, csvTimestamp) {
@@ -301,7 +450,7 @@ export function normalizeCoralogixRows(csvRows) {
 
   csvRows.forEach((row, index) => {
     try {
-      const serilog = parseJsonMaybe(row.Source);
+      const serilog = unwrapSerilog(row.Source);
       if (!serilog) {
         errors.push(`Linha ${index + 1}: Source JSON inválido`);
         return;
@@ -323,7 +472,12 @@ export function normalizeCoralogixRows(csvRows) {
 
       rows.push(...parsed);
     } catch (error) {
-      errors.push(`Linha ${index + 1}: ${error instanceof Error ? error.message : String(error)}`);
+      const message = error instanceof Error ? error.message : String(error);
+      if (/Unterminated string|Unexpected end of JSON/i.test(message)) {
+        errors.push(`Linha ${index + 1}: Source truncado (JSON incompleto)`);
+      } else {
+        errors.push(`Linha ${index + 1}: ${message}`);
+      }
     }
   });
 
@@ -335,7 +489,7 @@ export function normalizeCoralogixRows(csvRows) {
  * @returns {NormalizedRow[]}
  */
 export function loadNormalizedRows(csvRows) {
-  return csvRows.map((row) => {
+  const rows = csvRows.map((row) => {
     /** @type {NormalizedRow} */
     const normalized = newRow({});
     for (const key of Object.keys(normalized)) {
@@ -343,6 +497,7 @@ export function loadNormalizedRows(csvRows) {
     }
     return normalized;
   });
+  return collapseNamedSelectionRows(rows);
 }
 
 export function isRawCoralogixExport(csvRows) {
