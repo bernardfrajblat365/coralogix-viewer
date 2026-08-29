@@ -7,86 +7,163 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <main class="page">
-      <header class="hero">
-        <h1>Coralogix Viewer</h1>
-        <p>
-          Faça upload de um export CSV do Coralogix (bruto ou normalizado), visualize odds
-          em tabela e filtre por bookmaker, mercado, tipo de log ou texto livre.
-        </p>
-      </header>
+    <div class="sidebar-wrapper" id="sidebar-wrapper" data-slot="sidebar-wrapper" data-state="expanded">
+      <aside
+        class="sidebar"
+        id="sidebar"
+        data-slot="sidebar"
+        data-side="left"
+        data-variant="sidebar"
+        data-state="expanded"
+        data-collapsible=""
+        aria-label="Controles"
+      >
+        <header class="sidebar-header" data-slot="sidebar-header" data-sidebar="header">
+          <div class="sidebar-brand sidebar-label-fade">
+            <h1>Coralogix Viewer</h1>
+            <p class="sidebar-desc">
+              Upload de CSV Coralogix, filtros e exportação de odds normalizadas.
+            </p>
+          </div>
+          <button
+            type="button"
+            id="sidebar-trigger"
+            class="sidebar-trigger"
+            data-slot="sidebar-trigger"
+            data-sidebar="trigger"
+            aria-label="Alternar sidebar"
+            aria-expanded="true"
+            title="Alternar sidebar (Ctrl+B)"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2" />
+              <path d="M9 4v16" fill="none" stroke="currentColor" stroke-width="2" />
+            </svg>
+            <span class="sr-only">Alternar sidebar</span>
+          </button>
+        </header>
 
-      <section class="panel">
-        <div id="dropzone" class="dropzone">
-          <input id="file-input" type="file" accept=".csv,text/csv" />
-          <strong>Arraste um CSV aqui ou clique para escolher</strong>
-          <span>Suporta export bruto (coluna Source) ou CSV já normalizado</span>
+        <div class="sidebar-content" data-slot="sidebar-content" data-sidebar="content">
+          <section class="sidebar-group" data-slot="sidebar-group" data-sidebar="group">
+            <div class="sidebar-group-content" data-sidebar="group-content">
+              <button
+                type="button"
+                id="sidebar-upload-collapsed"
+                class="sidebar-menu-button sidebar-show-collapsed"
+                data-sidebar="menu-button"
+                aria-label="Carregar CSV"
+                title="Carregar CSV"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 16V4m0 0 4 4m-4-4-4 4M4 17v1a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
+
+              <div id="dropzone" class="dropzone sidebar-hide-collapsed">
+                <input id="file-input" type="file" accept=".csv,text/csv" />
+                <strong>Arraste um CSV aqui ou clique para escolher</strong>
+                <span>Suporta export bruto (coluna Source) ou CSV já normalizado</span>
+              </div>
+              <div id="errors" class="errors sidebar-hide-collapsed" hidden></div>
+            </div>
+          </section>
+
+          <section class="sidebar-group sidebar-interactive" data-slot="sidebar-group" data-sidebar="group">
+            <div class="sidebar-group-label sidebar-label-fade" data-slot="sidebar-group-label" data-sidebar="group-label">
+              Filtros
+            </div>
+            <div class="sidebar-group-content sidebar-fields" data-sidebar="group-content">
+              <div class="filter-field">
+                <span class="filter-field-label sidebar-label-fade">Bookmaker</span>
+                <div id="filter-bookmaker"></div>
+              </div>
+              <div class="filter-field">
+                <span class="filter-field-label sidebar-label-fade">Mercado</span>
+                <div id="filter-market"></div>
+              </div>
+              <div class="filter-field">
+                <span class="filter-field-label sidebar-label-fade">Tipo de log</span>
+                <div id="filter-type"></div>
+              </div>
+              <label class="filter-field">
+                <span class="filter-field-label sidebar-label-fade">Busca</span>
+                <input
+                  id="filter-search"
+                  class="sidebar-input"
+                  type="search"
+                  placeholder="Time, competição, MsgGuid..."
+                  data-slot="sidebar-input"
+                  data-sidebar="input"
+                />
+              </label>
+            </div>
+          </section>
         </div>
-        <div id="errors" class="errors" hidden></div>
-      </section>
 
-      <section class="panel">
-        <div class="filters">
-          <div class="filter-field">
-            <span class="filter-field-label">Bookmaker</span>
-            <div id="filter-bookmaker"></div>
+        <div
+          class="sidebar-separator sidebar-interactive"
+          data-slot="sidebar-separator"
+          data-sidebar="separator"
+          role="separator"
+        ></div>
+
+        <footer class="sidebar-footer sidebar-interactive" data-slot="sidebar-footer" data-sidebar="footer">
+          <div class="sidebar-group-label sidebar-label-fade" data-slot="sidebar-group-label" data-sidebar="group-label">
+            Ações
           </div>
-          <div class="filter-field filter-field-market">
-            <span class="filter-field-label">Mercado</span>
-            <div id="filter-market"></div>
+          <div class="sidebar-group-content sidebar-actions" data-sidebar="group-content">
+            <div id="toggle-hide-props"></div>
+            <div id="clear-filters"></div>
+            <div id="export-btn"></div>
           </div>
-          <div class="filter-field">
-            <span class="filter-field-label">Tipo de log</span>
-            <div id="filter-type"></div>
-          </div>
-          <label class="filter-field">
-            <span class="filter-field-label">Busca</span>
-            <input id="filter-search" type="search" placeholder="Time, competição, MsgGuid..." />
-          </label>
-          <div class="filter-field filter-actions">
-            <span class="filter-field-label">Ações</span>
-            <div class="actions">
-              <button id="toggle-hide-props" class="secondary action-btn" type="button">Ocultar props</button>
-              <button id="clear-filters" class="secondary action-btn" type="button">Limpar filtros</button>
-              <button id="export-btn" class="action-btn" type="button" disabled>Exportar filtrados</button>
+        </footer>
+
+        <button
+          type="button"
+          class="sidebar-rail"
+          data-slot="sidebar-rail"
+          data-sidebar="rail"
+          aria-label="Alternar sidebar"
+          title="Alternar sidebar"
+          tabindex="-1"
+        ></button>
+      </aside>
+
+      <main class="sidebar-inset" id="sidebar-inset" data-slot="sidebar-inset">
+        <section class="panel panel-data">
+          <div class="stats">
+            <div class="stat">
+              <span class="stat-label">Total</span>
+              <span id="stat-total" class="stat-value">0</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Visíveis</span>
+              <span id="stat-visible" class="stat-value">0</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Arquivo</span>
+              <span id="stat-source" class="stat-value">—</span>
+            </div>
+            <div class="stat stat-matchup">
+              <span class="stat-label">Confronto</span>
+              <span id="stat-matchup" class="stat-value">—</span>
+              <span id="stat-matchup-meta" class="stat-meta" hidden></span>
             </div>
           </div>
-        </div>
-      </section>
 
-      <section class="panel">
-        <div class="stats">
-          <div class="stat">
-            <span class="stat-label">Total</span>
-            <span id="stat-total" class="stat-value">0</span>
+          <div class="table-wrap">
+            <table class="data-table">
+              <colgroup id="table-colgroup"></colgroup>
+              <thead>
+                <tr id="table-head"></tr>
+              </thead>
+              <tbody id="table-body"></tbody>
+            </table>
+            <div id="empty-state" class="empty">Nenhum dado carregado ainda.</div>
           </div>
-          <div class="stat">
-            <span class="stat-label">Visíveis</span>
-            <span id="stat-visible" class="stat-value">0</span>
-          </div>
-          <div class="stat">
-            <span class="stat-label">Arquivo</span>
-            <span id="stat-source" class="stat-value">—</span>
-          </div>
-          <div class="stat stat-matchup">
-            <span class="stat-label">Confronto</span>
-            <span id="stat-matchup" class="stat-value">—</span>
-            <span id="stat-matchup-meta" class="stat-meta" hidden></span>
-          </div>
-        </div>
-
-        <div class="table-wrap">
-          <table class="data-table">
-            <colgroup id="table-colgroup"></colgroup>
-            <thead>
-              <tr id="table-head"></tr>
-            </thead>
-            <tbody id="table-body"></tbody>
-          </table>
-          <div id="empty-state" class="empty">Nenhum dado carregado ainda.</div>
-        </div>
-      </section>
-    </main>
+        </section>
+      </main>
+    </div>
 
     <script type="module" src="app.js"></script>
     <noscript>

@@ -10,6 +10,9 @@ import {
 } from "./normalizer.js";
 import { downloadCsv, parseCsv, rowsToCsv } from "./csv-utils.js";
 import { createMultiSelectDropdown } from "./multi-select-dropdown.js";
+import { createSwitch } from "./switch.js";
+import { createButton } from "./button.js";
+import { createSidebar } from "./sidebar.js";
 
 /** @type {import("./normalizer.js").NormalizedRow[]} */
 let allRows = [];
@@ -26,8 +29,21 @@ let filterBookmaker = null;
 let filterMarket = null;
 /** @type {ReturnType<typeof createMultiSelectDropdown> | null} */
 let filterType = null;
+/** @type {ReturnType<typeof createSwitch> | null} */
+let hidePropsSwitch = null;
+/** @type {ReturnType<typeof createButton> | null} */
+let clearFiltersButton = null;
+/** @type {ReturnType<typeof createButton> | null} */
+let exportButton = null;
+/** @type {ReturnType<typeof createSidebar> | null} */
+let sidebar = null;
 
 const els = {
+  sidebarWrapper: document.getElementById("sidebar-wrapper"),
+  sidebar: document.getElementById("sidebar"),
+  sidebarTrigger: document.getElementById("sidebar-trigger"),
+  sidebarRail: document.querySelector(".sidebar-rail"),
+  sidebarUploadCollapsed: document.getElementById("sidebar-upload-collapsed"),
   dropzone: document.getElementById("dropzone"),
   fileInput: document.getElementById("file-input"),
   filterBookmakerRoot: document.getElementById("filter-bookmaker"),
@@ -35,8 +51,8 @@ const els = {
   filterTypeRoot: document.getElementById("filter-type"),
   filterSearch: document.getElementById("filter-search"),
   toggleHideProps: document.getElementById("toggle-hide-props"),
-  clearFilters: document.getElementById("clear-filters"),
-  exportBtn: document.getElementById("export-btn"),
+  clearFiltersRoot: document.getElementById("clear-filters"),
+  exportBtnRoot: document.getElementById("export-btn"),
   tableHead: document.getElementById("table-head"),
   tableColgroup: document.getElementById("table-colgroup"),
   tableBody: document.getElementById("table-body"),
@@ -59,22 +75,82 @@ function itemsFromValues(values) {
   return values.map((value) => ({ value: String(value), label: String(value) }));
 }
 
+function initSidebar() {
+  sidebar = createSidebar({
+    wrapper: els.sidebarWrapper,
+    sidebar: els.sidebar,
+    trigger: els.sidebarTrigger,
+    rail: els.sidebarRail,
+    defaultOpen: true,
+    autoExpandRoots: [
+      els.filterBookmakerRoot,
+      els.filterMarketRoot,
+      els.filterTypeRoot,
+      els.filterSearch,
+      els.toggleHideProps,
+      els.clearFiltersRoot,
+      els.exportBtnRoot,
+      els.dropzone,
+    ].filter(Boolean),
+  });
+}
+
 function initFilters() {
+  hidePropsSwitch = createSwitch(els.toggleHideProps, {
+    label: "Ocultar props",
+    ariaLabel: "Ocultar props de jogador",
+    checked: hideProps,
+    onCheckedChange: (value) => {
+      hideProps = value;
+      renderTable();
+    },
+  });
+
+  clearFiltersButton = createButton(els.clearFiltersRoot, {
+    variant: "secondary",
+    size: "sm",
+    label: "Limpar filtros",
+    onClick: () => {
+      filterBookmaker?.clear();
+      filterMarket?.clear();
+      filterType?.clear();
+      els.filterSearch.value = "";
+      hideProps = false;
+      hidePropsSwitch?.setChecked(false);
+      renderTable();
+    },
+  });
+
+  exportButton = createButton(els.exportBtnRoot, {
+    variant: "primary",
+    size: "sm",
+    label: "Exportar filtrados",
+    disabled: true,
+    onClick: () => {
+      const visibleRows = getFilteredRows();
+      const columns = Object.keys(allRows[0] || {});
+      downloadCsv(rowsToCsv(visibleRows, columns), "coralogix_filtered.csv");
+    },
+  });
+
   filterBookmaker = createMultiSelectDropdown(els.filterBookmakerRoot, {
     label: "Bookmaker",
     placeholder: "Todas",
+    searchPlaceholder: "Pesquisar bookmaker…",
     onChange: renderTable,
   });
 
   filterMarket = createMultiSelectDropdown(els.filterMarketRoot, {
     label: "Mercado",
     placeholder: "Todos",
+    searchPlaceholder: "Pesquisar mercado…",
     onChange: renderTable,
   });
 
   filterType = createMultiSelectDropdown(els.filterTypeRoot, {
     label: "Tipo de log",
     placeholder: "Todos",
+    searchPlaceholder: "Pesquisar tipo…",
     items: [
       { value: "replicator", label: "replicator" },
       { value: "scanner", label: "scanner" },
@@ -310,12 +386,12 @@ function renderTable() {
   if (!visibleRows.length) {
     els.tableBody.innerHTML = "";
     els.empty.hidden = allRows.length === 0;
-    els.exportBtn.disabled = allRows.length === 0;
+    exportButton?.setDisabled(allRows.length === 0);
     return;
   }
 
   els.empty.hidden = true;
-  els.exportBtn.disabled = false;
+  exportButton?.setDisabled(false);
 
   const htmlParts = [];
 
@@ -376,21 +452,40 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
-function showErrors(errors) {
+/**
+ * @param {string[]} errors
+ * @param {{ hard?: boolean }} [options]
+ */
+function showErrors(errors, { hard = false } = {}) {
   if (!errors.length) {
     els.errors.textContent = "";
     els.errors.hidden = true;
+    els.errors.classList.remove("errors--notice", "errors--danger");
     return;
   }
+
   els.errors.hidden = false;
-  els.errors.textContent = errors.slice(0, 8).join("\n");
+  if (hard) {
+    els.errors.classList.add("errors--danger");
+    els.errors.classList.remove("errors--notice");
+    els.errors.textContent = errors.join("\n");
+    return;
+  }
+
+  els.errors.classList.add("errors--notice");
+  els.errors.classList.remove("errors--danger");
+  const n = errors.length;
+  els.errors.textContent =
+    n === 1
+      ? "1 linha do CSV não pôde ser parseada."
+      : `${n} linhas do CSV não puderam ser parseadas.`;
 }
 
 async function handleFile(file) {
   const text = await file.text();
   const csvRows = parseCsv(text);
   if (!csvRows.length) {
-    showErrors(["CSV vazio ou inválido."]);
+    showErrors(["CSV vazio ou inválido."], { hard: true });
     return;
   }
 
@@ -408,22 +503,26 @@ async function handleFile(file) {
     rows = loadNormalizedRows(csvRows);
     sourceLabel = `Normalizado (${file.name})`;
   } else {
-    showErrors(["Formato não reconhecido. Use export Coralogix (Source) ou CSV normalizado."]);
+    showErrors(["Formato não reconhecido. Use export Coralogix (Source) ou CSV normalizado."], {
+      hard: true,
+    });
     return;
   }
 
   allRows = rows;
   expandedRowKeys = new Set();
   hideProps = false;
-  els.toggleHideProps.classList.remove("active");
-  els.toggleHideProps.textContent = "Ocultar props";
+  hidePropsSwitch?.setChecked(false);
   showErrors(errors);
   populateFilters();
   renderTable();
 }
 
 function setupDropzone() {
-  els.dropzone.addEventListener("click", () => els.fileInput.click());
+  const openFilePicker = () => els.fileInput.click();
+
+  els.dropzone.addEventListener("click", openFilePicker);
+  els.sidebarUploadCollapsed?.addEventListener("click", openFilePicker);
   els.fileInput.addEventListener("change", () => {
     const file = els.fileInput.files?.[0];
     if (file) handleFile(file);
@@ -521,34 +620,11 @@ function setupTableInteractions() {
 
 function setupFilters() {
   els.filterSearch.addEventListener("input", renderTable);
-
-  els.toggleHideProps.addEventListener("click", () => {
-    hideProps = !hideProps;
-    els.toggleHideProps.classList.toggle("active", hideProps);
-    els.toggleHideProps.textContent = hideProps ? "Mostrar props" : "Ocultar props";
-    renderTable();
-  });
-
-  els.clearFilters.addEventListener("click", () => {
-    filterBookmaker?.clear();
-    filterMarket?.clear();
-    filterType?.clear();
-    els.filterSearch.value = "";
-    hideProps = false;
-    els.toggleHideProps.classList.remove("active");
-    els.toggleHideProps.textContent = "Ocultar props";
-    renderTable();
-  });
 }
-
-els.exportBtn.addEventListener("click", () => {
-  const visibleRows = getFilteredRows();
-  const columns = Object.keys(allRows[0] || {});
-  downloadCsv(rowsToCsv(visibleRows, columns), "coralogix_filtered.csv");
-});
 
 setupDropzone();
 setupTableInteractions();
 initFilters();
+initSidebar();
 setupFilters();
 renderTable();

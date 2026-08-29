@@ -24,9 +24,35 @@ function Parse-JsonMaybe {
     param([object]$Value)
     if ($null -eq $Value) { return $null }
     if ($Value -is [hashtable] -or $Value -is [System.Collections.IDictionary]) { return $Value }
+    if ($Value -is [pscustomobject]) { return $Value }
     $text = [string]$Value
     if ([string]::IsNullOrWhiteSpace($text)) { return $null }
     return ($text | ConvertFrom-Json)
+}
+
+function Unwrap-Serilog {
+    param([object]$Value)
+    $current = Parse-JsonMaybe $Value
+    for ($depth = 0; $depth -lt 5; $depth++) {
+        if ($null -eq $current) { return $null }
+        $hasTemplate = $null -ne (Get-Member -InputObject $current -Name MessageTemplate -ErrorAction SilentlyContinue)
+        $hasProps = $null -ne (Get-Member -InputObject $current -Name Properties -ErrorAction SilentlyContinue)
+        if ($hasTemplate -or $hasProps) { return $current }
+        if ($null -ne (Get-Member -InputObject $current -Name text -ErrorAction SilentlyContinue) -and $null -ne $current.text) {
+            $current = Parse-JsonMaybe $current.text
+            continue
+        }
+        $logRecord = $null
+        if ($null -ne (Get-Member -InputObject $current -Name logRecord -ErrorAction SilentlyContinue)) {
+            $logRecord = $current.logRecord
+        }
+        if ($null -ne $logRecord -and $null -ne (Get-Member -InputObject $logRecord -Name body -ErrorAction SilentlyContinue) -and $null -ne $logRecord.body) {
+            $current = Parse-JsonMaybe $logRecord.body
+            continue
+        }
+        break
+    }
+    return $current
 }
 
 function Detect-LogType {
@@ -311,7 +337,7 @@ $errors = @()
 for ($i = 0; $i -lt $inputRows.Count; $i++) {
     $row = $inputRows[$i]
     try {
-        $serilog = Parse-JsonMaybe $row.Source
+        $serilog = Unwrap-Serilog $row.Source
         if ($null -eq $serilog) {
             $errors += "row $i : empty or invalid Source JSON"
             continue
